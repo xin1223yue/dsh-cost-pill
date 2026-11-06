@@ -1,47 +1,65 @@
 # dsh-cost-pill
 
-[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（dsh）Web 界面插件：**实时显示本次对话花了多少钱**。
+**DeepSeek Harness（dsh）Web 界面插件：这次对话到底花了多少钱，随时看得见。**
 
-两处显示，同一个计价引擎：
+[![verify](https://github.com/xin1223yue/dsh-cost-pill/actions/workflows/verify.yml/badge.svg)](https://github.com/xin1223yue/dsh-cost-pill/actions/workflows/verify.yml)
+[![release](https://img.shields.io/github/v/release/xin1223yue/dsh-cost-pill?color=2ea043)](https://github.com/xin1223yue/dsh-cost-pill/releases)
+[![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-1. **输入框下方统计行** —— 在「2 轮 33 步 · 219 tok/s ｜ 1.4M tok · 缓存命中 98% ｜ ◔ 6%」这一行里加一格 `¥`。
-2. **每条回复的脚注行** —— 在复制 / 点赞 / `用量 2.2M tok` 那一行加一个 `¥`，点开看这一轮的账单。
+![dsh-cost-pill](docs/demo.png)
+
+输入框下方统计行多一格 `¥2.15`，点开就是账单；每条回复的脚注行再多一个 `¥0.07`，点开是这一轮的分项。
+
+```powershell
+git clone https://github.com/xin1223yue/dsh-cost-pill.git
+cd dsh-cost-pill
+powershell -ExecutionPolicy Bypass -File .\install.ps1   # macOS/Linux: sh ./install.sh
+```
+
+重启 dsh web → `Ctrl+Shift+R`。就这两步，没有构建、没有依赖、没有联网装包。
+
+---
+
+## 它显示什么
+
+**① 统计行里的一格** —— 与「2 轮 33 步 · 219 tok/s ｜ 1.4M tok · 缓存命中 98% ｜ ◔ 6%」并排，不多占一行。
+
+**② 每条回复脚注里的一个数** —— 就在复制 / 点赞 / `用量 2.2M tok` 那一行：
+
+![per-turn chip](docs/turn.png)
+
+**③ 点开是账单** —— 输入（未命中 + 缓存写入）/ 缓存命中 / 输出 三行，各带 tokens 与金额，外加模型、计费时刻、当前时段、当轮单价：
 
 ```
-⏱ 2 轮 33 步 · 219 tok/s     1.4M tok · 缓存命中 98%     ¥2.15     ◔ 18%
-                                                          ↑
-
-[复制] ¥0.07 [👍][👎][分享]      [◫] 用量 2.2M tok       15:40
-       ↑
-```
-
-点任意一个 `¥` 弹出账单（材质与官方「轮次用量」弹层一致，带背景虚化）：
-
-```
-本次对话花费                                    ¥2.15
-─────────────────────────────────────────────────────
-输入（未命中 + 缓存写入）            11.8万 · ¥0.35
-缓存命中                            1174.8万 · ¥1.17
-输出                                  6.9万 · ¥0.62
-─────────────────────────────────────────────────────
-已计价 1 轮 · 合计 1193.5万 tokens
-当前时段高峰（09:00–12:00 / 14:00–18:00 为高峰，北京时间）· 输入 3 / 缓存 0.1 / 输出 9 元每百万 tokens
+本次对话花费                                       ¥2.15
+──────────────────────────────────────────────────────────
+输入（未命中 + 缓存写入）               11.8万 · ¥0.35
+缓存命中                               1174.8万 · ¥1.17
+输出                                     6.9万 · ¥0.62
+──────────────────────────────────────────────────────────
+已计价 2 轮 · 合计 1193.5万 tokens
+当前时段高峰（09:00–12:00 / 14:00–18:00 为高峰，北京时间）
 每条回复按它发生时刻的价格计价，高峰 / 空闲自动切换
 ```
 
-## 特性
+弹层用的是官方「轮次用量」那套材质：半透明菜单面 + 背景虚化 + 原生投影描边，下面的输入框文字不会透上来。
 
-- **逐条回复计价**：每个 Turn 用它自己的 `turn/start` 时间戳 + provider 上报的真实桶（未命中输入 / 缓存命中 / 缓存写入 / 输出）算钱。
-- **高峰 / 空闲自动切换**：09:00–12:00、14:00–18:00（北京时间）为高峰，其余为空闲；一条会话跨 12 点会自然分成两段价。
-- **模型归属准确**：读 `routes[].model`，中途换模型不影响历史轮的价。
-- **重开历史对话不重算**：已加载的轮次永远按它们各自时刻的价，不按"现在"。
-- **只读、离线**：全部在浏览器里算，不新增 Host 服务、不做日志回放、不请求任何接口、不碰 API Key。
-- **没有本地累加状态**：每次渲染从日志重算，所以刷新 / 切走再回来 / 重开同一条会话，数字完全一致（幂等）。
-- **零构建**：仓库里带的是可直接加载的 `client.js`（ModuleLoader 格式），clone 下来就能用，不需要 `pnpm build`。
+## 为什么是它
+
+| 关心的事 | 这个插件的做法 |
+| --- | --- |
+| 数字准不准 | 每轮用 provider 上报的真实桶（含缓存命中/写入）算，不按上下文长度估 |
+| 高峰 / 空闲 | 按每条回复自己的 `turn/start` 时刻定档，跨 12:00 / 18:00 自动分段 |
+| 换过模型 | 读 `routes[].model`，历史轮次不会被新模型价格覆盖 |
+| 重开旧会话 | 已加载的轮次永远按当时的价，**不会**用今天的时段重算 |
+| 估没估 | 窗口外没有逐轮记录的部分按已计价轮次的均价折算，并且**一定**带 `≈` |
+| 会不会拖慢 | 纯前端读现有数据，零请求、零 Host 服务、零日志回放 |
+| 会不会打架 | 只往两个官方槽位各加一格，不替换任何现有控件 |
+| 安装门槛 | 零依赖、零构建，仓库里就是可直接加载的 bundle |
 
 ## 安装
 
-插件运行时零依赖、无构建步骤，安装只是两件事：把包暴露到 profile 的 `node_modules`，并把包名登记进 profile 的 `dsh.profile.bundles`。
+插件运行时零依赖、无构建步骤。安装只是两件事：把包暴露到 profile 的 `node_modules`，并把包名登记进 profile 的 `dsh.profile.bundles`。
 
 ### 方式一：克隆 + 一键脚本（推荐，不需要联网装包）
 
@@ -55,42 +73,42 @@ macOS / Linux：
 
 ```sh
 git clone https://github.com/xin1223yue/dsh-cost-pill.git
-cd dsh-cost-pill
-sh ./install.sh
+cd dsh-cost-pill && sh ./install.sh
 ```
 
-脚本做的事（`install.mjs`，跨平台）：
+`install.mjs`（跨平台，三个入口都是薄包装）会：
 
-1. 在 `~/.dsh/profiles/web/node_modules/dsh-cost-pill` 建一个指向克隆目录的链接（Windows 用 junction）——所以改源码立刻生效；
-2. 读 `~/.dsh/profiles/web/package.json`，把 `dsh-cost-pill` 写进 `dependencies` 和 `dsh.profile.bundles`（幂等，可选 `--dry-run` 先看）；
-3. 提示重启。
+1. 在 `~/.dsh/profiles/web/node_modules/dsh-cost-pill` 建指向克隆目录的链接（Windows 用 junction，改源码立刻生效）；
+2. 把 `dsh-cost-pill` 写进 `package.json` 的 `dependencies` 与 `dsh.profile.bundles`（幂等）；
+3. 打印重启提示。
 
-参数：`--profile <名字>`（默认 `web`，也读 `$DSH_PROFILE`）、`--dry-run`。
+参数：`--profile <名字>`（默认 `web`，也读 `$DSH_PROFILE`）、`--dry-run`（只看不改）。
 
-### 方式二：走 dsh 的插件命令（需要联网）
+### 方式二：走 dsh 的插件命令（需联网）
 
 ```sh
 dsh plugin --profile web add xin1223yue/dsh-cost-pill
 ```
 
-这条只加依赖（它转发给 pnpm），**还要手工登记 bundle**：编辑 `~/.dsh/profiles/web/package.json`，把 `"dsh-cost-pill"` 加进 `dsh.profile.bundles` 数组，然后重启。少这一步插件不会加载。
+它只加依赖（转发给 pnpm），**还要手工登记 bundle**：编辑 `~/.dsh/profiles/web/package.json`，把 `"dsh-cost-pill"` 加进 `dsh.profile.bundles`。少这一步插件不会加载。
 
-### 卸载
-
-```sh
-# 删掉 bundle 登记与该依赖，然后重启
-dsh plugin --profile web remove dsh-cost-pill
-```
-
-## 生效
+### 生效
 
 客户端 bundle 的 revision 在 dsh 启动时烘进页面，所以装完要重启一次：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\restart-dsh.ps1     # Windows，默认 3080 端口
+powershell -ExecutionPolicy Bypass -File .\restart-dsh.ps1     # Windows，默认 3080
 ```
 
-或手动 `Ctrl+C` 后在原目录重新 `dsh web`。重启会换新的启动令牌，请用新控制台打印的 URL 打开页面（旧标签页会 401）。
+或手动 `Ctrl+C` 后重新 `dsh web`。重启会换新的启动令牌，用新控制台打印的 URL 打开页面；接着 `Ctrl+Shift+R` 硬刷。
+
+### 卸载
+
+```sh
+dsh plugin --profile web remove dsh-cost-pill
+```
+
+再把 `dsh.profile.bundles` 里的那一行删掉，重启。
 
 ## 精确度
 
@@ -99,13 +117,13 @@ powershell -ExecutionPolicy Bypass -File .\restart-dsh.ps1     # Windows，默�
 | 已加载的每一轮 | `turn-tail.tokenUsage` + `turn/start` 时间戳 | **精确** |
 | 每轮用的模型 | `routes[].model` | **精确** |
 | 高 / 低峰 | 该轮时间戳落在哪个时段 | **精确** |
-| 脚注「本轮花费」 | 同上，单轮 | **精确**（该轮用量不全时直接不显示，不猜） |
-| 窗口外 / 被压缩掉的历史 | 会话级 `tokenUsage` 投影减去已计价比部分 | 估算，**必带 `≈`**，用已计价轮次的均价 |
+| 脚注「本轮花费」 | 同上，单轮 | **精确**（该轮用量不全就不显示，不猜） |
+| 窗口外 / 被压缩掉的历史 | `tokenUsage` 投影减去已计价比部分 | 估算，**必带 `≈`**，用已计价轮次的均价 |
 | 窗口里一轮都没有 | 当前模型 + 当前时刻价 | 估算，**必带 `≈`** |
 
-也就是：**能找到时间的都精确；只有"根本没有逐轮记录"的部分才估算，并且一定标 `≈`。**
+一句话：**能找到时间的都精确；只有"根本没有逐轮记录"的部分才估算，而且一定标 `≈`。**
 
-## 计价口径
+## 价表
 
 单位：元 / 百万 tokens。
 
@@ -119,7 +137,7 @@ powershell -ExecutionPolicy Bypass -File .\restart-dsh.ps1     # Windows，默�
 
 - `cacheWrite` 不单独计费，按未命中输入价计。
 - 模型按 id 里的 `pro` / `reason` / `chat` 关键字分档，未知型号落到 flash 档。
-- 改价：编辑 `client.js` 里的 `V4_PEAK` / `V4_OFFPEAK` / `V4_BASE` / `POLICY_SWITCH`。
+- 改价：`client.js` 里的 `V4_PEAK` / `V4_OFFPEAK` / `V4_BASE` / `POLICY_SWITCH`。
 
 ## 时段与历史
 
@@ -131,67 +149,55 @@ powershell -ExecutionPolicy Bypass -File .\restart-dsh.ps1     # Windows，默�
 | 窗口外没加载出来的 token | 已计价轮次的真实均价（`≈`） |
 | 窗口里一轮都没有 | 当前模型 + 当前时刻价（`≈`） |
 
-## 实现要点
+计价没有本地累加状态：每次渲染都从日志重算，所以刷新、切走再回来、重开同一条会话，数字完全一致（幂等）。
 
-- 注册两个槽位，都由 dsh 的槽位契约声明，不读别的插件的 DOM：
+## 实现
 
-  | 槽位 | id | order | 拿到的标准 kit |
-  | --- | --- | --- | --- |
-  | `conversation.composer.dock` | `cost` | 2 | `useChat` / `useProjection` |
-  | `conversation.chat.assistant-actions` | `cost` | 60 | `useChat` + owner prop `messageId` |
+| 槽位 | id | order | 用途 |
+| --- | --- | --- | --- |
+| `conversation.composer.dock` | `cost` | 2 | 统计行那一格 |
+| `conversation.chat.assistant-actions` | `cost` | 60 | 脚注那一格 |
 
-- 单价与账目全是纯函数（`priceFor` / `priceBuckets` / `billOf` / `billForMessage`），没有副作用，便于测试。
-- 浏览器 bundle 是手写的 ModuleLoader 握手格式：`window.__ModuleLoader__.load({ id, factory })`，`react` / `react-dom` 从平台模块表取，无 `dsh.client.external`。
-- Host 半是空的（`export function apply() {}`）：插件不注册服务、不加工具，纯展示。
+- 槽位由 dsh 的槽位契约声明，组件拿到标准 kit（`useChat` / `useProjection`），不读别的插件的 DOM。
+- 浏览器半是手写的 ModuleLoader bundle：`window.__ModuleLoader__.load({ id, factory })`，`react` / `react-dom` 走平台模块表。
+- 宿主半是空的（`export function apply() {}`）：不注册服务、不加工具、不碰 API Key。
+- 计价是纯函数（`priceFor` / `priceBuckets` / `billOf` / `billForMessage`），`node verify.mjs` 覆盖它们。
 
-## 验证
+## 兼容性
 
-```sh
-node verify.mjs
-```
-
-离线跑：用假 `window.__ModuleLoader__` 加载 bundle、走两处 `ctx.slots.register`，再用一个极小渲染器（只用 `useState/useMemo/useRef/useEffect`）渲染组件，断言：
-
-- 两个槽位的 id / order
-- 弹层材质带 `backdrop-filter` 兜底值、`-webkit-` 前缀、原生描边变量
-- 高峰 / 空闲 / 旧价三条价表分支
-- 逐 Turn 计价、窗口外均价补齐、跨时段混合（白天高峰 + 夜间空闲）
-- 按 `messageId` 取单轮账单；未知 id、缺 `tokenUsage`、缺 chat kit 时必须渲染空
-- 空会话不渲染，`≈` 只出现在估算路径
-
-## 目录
-
-```
-client.js       浏览器半（ModuleLoader bundle，唯一有逻辑的文件）
-index.js        宿主半（空）
-cordis.patch.yml  插入 Loader 行
-package.json    清单（dsh.bundle / dsh.client 声明）
-locale/         插件列表里的标题与描述（中 / 英）
-icon.svg        插件图标
-verify.mjs      离线验证（无依赖）
-install.mjs     跨平台安装器
-install.ps1 / install.cmd / install.sh   安装器入口
-restart-dsh.ps1 / restart-dsh.cmd        Windows 重启 dsh web
-sync.ps1        开发用：把克隆目录重新挂回 profile
-```
+在 dsh `0.2.1-rc.5` 上验证（Windows / Chromium）。依赖两个槽位名；dsh 若重命名它们，`¥` 会静默消失而不是报错——改 `apply()` 里的名字即可。
 
 ## 已知限制
 
-- **一轮内跨模型重试**：`routes` 只给模型名不给分桶，整轮按最后一个路由计价（正常不会发生）。
-- **槽位改名**：dsh 若在后续版本重命名这两个槽位，`¥` 会静默消失，不报错；改 `apply()` 里的槽位名即可。
-- **只认 DeepSeek 价表**：其他 provider 的模型会落到 flash 档，显示的金额仅供参照。
+- **一轮内跨模型重试**：`routes` 只给模型名不给分桶，整轮按最后一个路由计价。
+- **只认 DeepSeek 价表**：其他 provider 的模型落到 flash 档，金额仅供参照。
+- **子代理的独立会话**：各自计入各自会话，不会汇总进父会话的账单。
+
+## 开发
+
+```sh
+node verify.mjs     # 离线验证，CI 也跑这个
+```
+
+无依赖、无构建。改动说明见 [CONTRIBUTING.md](CONTRIBUTING.md)，变更记录见 [CHANGELOG.md](CHANGELOG.md)。
+
+---
+
+**如果它帮你躲过一次月底的意外账单，点个 ⭐ 能让更多用 dsh 的人看到。**
 
 ## English
 
-A dsh (DeepSeek Harness) web plugin that shows what the current conversation costs, in CNY, in two places: the composer stats line under the input box, and the footer of every completed turn. Every reply is priced at its own `turn/start` timestamp with the official DeepSeek table, including the 2026-08-17 peak/off-peak policy, so reopening an old conversation never re-bills it at today's rate. Tokens that no per-turn record covers are estimated at the blended rate of the priced turns and always carry a `≈`.
+A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh) web plugin that shows what the current conversation costs, in CNY:
 
-Zero Host services, zero network calls, zero build step — the shipped `client.js` is a ready ModuleLoader bundle. Requires a dsh version that declares the `conversation.composer.dock` and `conversation.chat.assistant-actions` slots (verified against 0.2.1-rc.5).
+- one cell in the composer stats line (`conversation.composer.dock`),
+- one chip in every completed turn's footer (`conversation.chat.assistant-actions`),
+- a bill dialog with the three billed buckets, the model, the billing instant and the unit price in force.
 
-```sh
-git clone https://github.com/xin1223yue/dsh-cost-pill.git
-cd dsh-cost-pill && sh ./install.sh
-# restart dsh web, then hard-refresh the page
-```
+Every reply is priced at its own `turn/start` instant with the official DeepSeek table, including the 2026-08-17 peak/off-peak policy (peak 09:00–12:00 / 14:00–18:00 Beijing), so reopening a historical conversation never re-bills it at today's rate. Tokens that no per-turn record covers are estimated at the blended rate of the priced turns and always carry a `≈`.
+
+Client-only: no Host service, no Remote call, no session-log replay, no API key access, no build step, no runtime dependencies. The shipped `client.js` is a ready ModuleLoader bundle — `install.mjs` links it into your profile and registers the bundle, then restart dsh web.
+
+Verified against dsh `0.2.1-rc.5`.
 
 ## License
 

@@ -1,6 +1,6 @@
 {
   "name": "dsh-cost-pill",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "DeepSeek Harness (dsh) web plugin: live conversation spend in CNY — one cell in the composer stats line and one chip in every completed-Turn footer, priced per reply with the official DeepSeek peak/off-peak table.",
   "type": "module",
   "main": "index.js",

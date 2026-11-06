@@ -1,0 +1,35 @@
+name: verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      # No install step: the plugin has zero runtime dependencies and the
+      # browser bundle is checked in, so the suite runs against the shipped
+      # artifact exactly as a user would load it.
+      - name: Offline verification suite
+        run: node verify.mjs
+      - name: Package manifest sanity
+        run: |
+          node -e "
+            const pkg = require('./package.json');
+            const need = ['name', 'version', 'license', 'dsh', 'exports'];
+            for (const key of need) {
+              if (!pkg[key]) throw new Error('package.json is missing ' + key);
+            }
+            if (pkg.dsh.client.platform !== 'web') throw new Error('dsh.client.platform must be web');
+            if (!pkg.exports['./client']) throw new Error('missing ./client export');
+            console.log('manifest ok:', pkg.name + '@' + pkg.version);
+          "
+      - name: Client bundle is loadable as a plain script
+        run: node --check client.js

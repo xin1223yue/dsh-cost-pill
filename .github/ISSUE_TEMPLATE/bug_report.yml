@@ -1,0 +1,58 @@
+name: Bug report
+description: Something renders wrong, or the number looks off.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. For a wrong number, the panel's own footer is the
+        most useful evidence: it names the model, the billing instant and the
+        unit price used for that bill.
+  - type: input
+    id: dsh-version
+    attributes:
+      label: dsh version
+      description: Output of `dsh --version`.
+      placeholder: 0.2.1-rc.5
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS
+      placeholder: Windows 11 / macOS 15 / Ubuntu 24.04
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where
+      options:
+        - Composer stats line (the ¥ next to 缓存命中)
+        - Turn footer (the ¥ next to 用量 N tok)
+        - The bill dialog itself
+        - Install / restart
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      description: If a number looks wrong, say which one and why (e.g. "this turn was at 15:00, which is peak").
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Screenshot / console errors
+      description: Paste a screenshot of the open dialog and any errors from the browser console.
+      render: text
+    validations:
+      required: false

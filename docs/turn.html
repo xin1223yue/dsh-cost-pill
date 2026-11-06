@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>turn</title>
+<style>
+  :root { --dsw-alias-label-tertiary: #8b8f98; --dsw-alias-label-secondary: #4d5057; --dsw-radius-sm: 6px; }
+  html, body { margin: 0; background: #ffffff; font-family: -apple-system, "Segoe UI", "Microsoft YaHei", system-ui, sans-serif; }
+  .pad { padding: 22px 24px; width: 640px; box-sizing: border-box; }
+  .turn { display: flex; align-items: center; gap: 8px; height: 28px; color: var(--dsw-alias-label-tertiary); font-size: 13px; }
+  .turn .ico { width: 16px; height: 16px; flex: none; color: #a8adb6; }
+  .turn .end { margin-left: 8px; display: inline-flex; align-items: center; gap: 8px; }
+  .turn .clock { font-size: 12px; }
+  .dcp-turn-anchor { display: inline-flex; align-items: center; min-width: 0; }
+  .dcp-turn { font: inherit; font-size: 12px; line-height: 18px; font-variant-numeric: tabular-nums; color: var(--dsw-alias-label-tertiary); background: 0 0; border: 0; border-radius: var(--dsw-radius-sm); padding: 1px 6px; margin: 0; white-space: nowrap; }
+</style></head>
+<body><div class="pad"><div class="turn">
+  <svg class="ico" viewBox="0 0 16 16"><rect x="5.6" y="5.6" width="7" height="7.6" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M10.2 5.6V4.2c0-.7-.5-1.2-1.2-1.2H4.2c-.7 0-1.2.5-1.2 1.2v4.8c0 .7.5 1.2 1.2 1.2h1.4" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>
+  <svg class="ico" viewBox="0 0 16 16"><path d="M5.6 7.2 7.8 3c.9 0 1.5.7 1.5 1.5v1.7h3c.8 0 1.3.7 1.2 1.4l-.6 3.6c-.1.7-.7 1.1-1.4 1.1H6.2V7.9" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><rect x="3.4" y="7.2" width="2.2" height="5.1" rx=".8" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>
+  <svg class="ico" viewBox="0 0 16 16"><path d="M10.4 8.8 8.2 13c-.9 0-1.5-.7-1.5-1.5v-1.7h-3c-.8 0-1.3-.7-1.2-1.4l.6-3.6c.1-.7.7-1.1 1.4-1.1h5.3v4.2" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><rect x="10.4" y="3.7" width="2.2" height="5.1" rx=".8" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>
+  <svg class="ico" viewBox="0 0 16 16"><circle cx="12.2" cy="4.4" r="1.7" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="3.8" cy="8" r="1.7" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="12.2" cy="11.6" r="1.7" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M5.4 7.1 10.6 4.9M5.4 8.9l5.2 2.2" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>
+  <span class="dcp-turn-anchor"><button class="dcp-turn">¥0.07</button></span>
+  <span class="end">
+    <svg width="16" height="16" viewBox="0 0 16 16"><ellipse cx="8" cy="3.9" rx="5.2" ry="2.1" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M2.8 3.9v4.1c0 1.16 2.33 2.1 5.2 2.1s5.2-.94 5.2-2.1V3.9M2.8 8v4.1c0 1.16 2.33 2.1 5.2 2.1s5.2-.94 5.2-2.1V8" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>
+    <span>用量 2.2M tok</span>
+    <span class="clock">15:40</span>
+  </span>
+</div></div></body></html>

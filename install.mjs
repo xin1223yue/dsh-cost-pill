@@ -89,6 +89,9 @@ console.log('Done. Restart dsh web so the client bundle is assembled again:');
 console.log(`  restart-dsh.ps1            (Windows)`);
 console.log(`  dsh --profile ${profile}    (any platform; then reload the page)`);
 console.log('Then hard-refresh the page (Ctrl+Shift+R).');
+console.log('');
+console.log('If this saves you from a surprise bill, a star helps others find it:');
+console.log('  https://github.com/xin1223yue/dsh-cost-pill');
 
 /** Remove a previous link or installed copy without following it. */
 function removeEntry(path) {
