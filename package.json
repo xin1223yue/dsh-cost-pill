@@ -1,0 +1,60 @@
+{
+  "name": "dsh-cost-pill",
+  "version": "1.0.0",
+  "description": "DeepSeek Harness (dsh) web plugin: live conversation spend in CNY — one cell in the composer stats line and one chip in every completed-Turn footer, priced per reply with the official DeepSeek peak/off-peak table.",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "verify": "node verify.mjs"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "cost",
+    "billing",
+    "tokens",
+    "usage"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
+    }
+  },
+  "license": "MIT",
+  "author": "xin1223yue",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xin1223yue/dsh-cost-pill.git"
+  },
+  "homepage": "https://github.com/xin1223yue/dsh-cost-pill#readme",
+  "bugs": {
+    "url": "https://github.com/xin1223yue/dsh-cost-pill/issues"
+  }
+}

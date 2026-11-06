@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Conversation cost",
+    "description": "Shows the live DeepSeek spend (CNY) of the current conversation in the composer stats line, with input / cache-hit / output breakdown on click."
+  }
+}
