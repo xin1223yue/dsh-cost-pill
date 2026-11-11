@@ -1,28 +1,44 @@
 /*
  * dsh-cost-pill — browser half.
  *
- * Registers one extra cell in `conversation.composer.dock` (the stats line under
- * the composer that already shows 轮/步, tok/s, tok, 缓存命中 and the context
- * ring) and renders the live spend of THIS conversation in CNY.
+ * Three readouts, one plugin:
  *
- * Data path (no Host service, no Remote call, no session-log replay):
+ *   1. `conversation.composer.dock`        — what this conversation cost (CNY).
+ *   2. `conversation.chat.assistant-actions` — what each completed Turn cost.
+ *   3. `sidebar.footer.action`             — the DeepSeek account balance beside
+ *      Settings at the sidebar foot: compact glyph on the 56px rail, `¥197.66`
+ *      once the sidebar is wide.
+ *
+ * Cost data path (no Host service, no session-log replay):
  *   - `useChat(s => s.timeline.turns)`  -> per-Turn `turn-tail` rows carrying
  *     exact provider usage plus `routes[].model` attribution and the Turn's
  *     start time, so every reply is priced with the table in force at the
  *     moment it was billed (including the 2026-08-17 peak/off-peak policy).
  *   - `useProjection('tokenUsage')`     -> durable whole-log bucket totals. Any
- *     tokens the loaded Turn window does not cover are priced at the current
- *     model and current period and flagged as an estimate.
+ *     tokens the loaded Turn window does not cover are priced at the blended
+ *     rate of the priced Turns and flagged as an estimate.
+ *
+ * Balance data path: the plugin's authenticated Host route reads the signed-in
+ * account or the configured DeepSeek API key.
  *
  * Bundle format: the ModuleLoader handshake the Client module table expects.
- * `react` and `react-dom` come from the frozen platform table; nothing else is
- * required, so `dsh.client.external` stays empty.
+ * `react`, `react-dom` and the UI primitives come from the frozen platform
+ * table; nothing else is required, so `dsh.client.external` stays empty.
  */
 window.__ModuleLoader__.load({
   id: 'dsh-cost-pill',
   factory(require) {
     var React = require('react');
     var ReactDOM = require('react-dom');
+
+    /* The primitives table is frozen with the shell, but a build without it
+       must only cost us the tooltip, never the plugin itself. */
+    var primitives = null;
+    try {
+      primitives = require('@deepseek-ai/dsh-client-ui-primitives');
+    } catch (error) {
+      primitives = null;
+    }
 
     var CSS_TAG = 'dsh-cost-pill/plugin.css';
 
@@ -146,6 +162,39 @@ window.__ModuleLoader__.load({
       if (value >= 1e8) return (value / 1e8).toFixed(2) + '亿';
       if (value >= 1e4) return (value / 1e4).toFixed(1) + '万';
       return String(Math.round(value));
+    }
+
+    /* ------------------------------------------------------------------ *
+     * Account balance (recharge wallet + granted bonus wallet)
+     * ------------------------------------------------------------------ */
+
+    /** Two decimals, thousands separators, currency glyph. */
+    function formatMoney(currency, amount) {
+      var symbol = currency === 'USD' ? '$' : '¥';
+      var value = typeof amount === 'number' && isFinite(amount) ? amount : 0;
+      if (Math.abs(value) < 0.005) value = 0;
+      var parts = value.toFixed(2).split('.');
+      parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+      return symbol + parts.join('.');
+    }
+
+    /**
+     * Validate the Host's balance payload.
+     * @param body - parsed `/api/cost-pill.balance` response.
+     * @returns display figures, or null when the Host reported no readable wallet.
+     */
+    function normalizeBalance(body) {
+      if (body === undefined || body === null || body.ok !== true) return null;
+      var total = Number(body.total);
+      if (!isFinite(total)) return null;
+      var recharge = Number(body.recharge);
+      var bonus = Number(body.bonus);
+      return {
+        currency: body.currency === 'USD' ? 'USD' : 'CNY',
+        total: total,
+        recharge: isFinite(recharge) ? recharge : 0,
+        bonus: isFinite(bonus) ? bonus : 0
+      };
     }
 
     /**
@@ -357,7 +406,22 @@ window.__ModuleLoader__.load({
       '.dcp-details dd{color:var(--dsw-alias-label-secondary);text-align:right;white-space:nowrap}',
       '.dcp-foot{margin-top:10px;padding-top:9px;border-top:.5px solid var(--dsw-alias-border-l2);',
       'color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:17px}',
-      '.dcp-foot em{font-style:normal;color:var(--dsw-alias-label-secondary)}'
+      '.dcp-foot em{font-style:normal;color:var(--dsw-alias-label-secondary)}',
+      /* Sidebar-foot balance: one quiet key/value row that matches the
+         sidebar's own text rhythm instead of inventing a widget. */
+      '.dcp-bal{box-sizing:border-box;width:100%;height:28px;padding:0 6px;margin:0;border:0;',
+      'border-radius:var(--dsw-radius-sm);background:0 0;display:flex;align-items:center;',
+      'justify-content:space-between;gap:8px;font:inherit;color:var(--dsw-alias-label-secondary);',
+      'cursor:default;white-space:nowrap}',
+      '.dcp-bal[data-rail="true"]{width:28px;padding:0;justify-content:center}',
+      '.dcp-bal-label{color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:1;',
+      'letter-spacing:.04em}',
+      '.dcp-bal-value{font-size:12px;line-height:1;font-weight:500;font-variant-numeric:tabular-nums;',
+      'letter-spacing:.01em;color:var(--dsw-alias-label-secondary)}',
+      '.dcp-bal[data-state="empty"] .dcp-bal-value,',
+      '.dcp-bal[data-state="error"] .dcp-bal-value{color:var(--dsw-alias-label-tertiary);font-weight:400}',
+      '.dcp-bal-sym{color:var(--dsw-alias-label-tertiary);font-size:11px;margin-right:2px}',
+      '.dcp-bal[data-rail="true"] .dcp-bal-sym{font-size:13px;margin-right:0}'
     ].join('');
 
     /** Install the stylesheet once per page; returns its disposer. */
@@ -681,6 +745,130 @@ window.__ModuleLoader__.load({
       );
     }
 
+    /**
+     * Presentational footer cell: one quiet key/value row — `余额` on the left
+     * of the sidebar's own 11px label scale, the figure on the right in the
+     * 12px value scale. No chrome, no border, no hover: it is a readout, not a
+     * control, so it must not compete with the avatar and Settings beneath it.
+     *
+     * Unknown states degrade to a tertiary dash rather than a diagnostic glyph.
+     */
+    function BalanceCell(props) {
+      var state = props.state;
+      if (state === undefined || state === null || state.kind === 'pending') return null;
+      var wide = props.wide === true;
+      var ok = state.kind === 'ok';
+      var summary = ok ? state.summary : null;
+      var symbol = ok && summary.currency === 'USD' ? '$' : '¥';
+      var amount = ok ? formatMoney(summary.currency, summary.total) : '';
+
+      var value = ok
+        ? [
+            React.createElement('span', { key: 'sym', className: 'dcp-bal-sym' }, symbol),
+            amount.slice(symbol.length)
+          ]
+        : '—';
+
+      var children = wide
+        ? [
+            React.createElement('span', { key: 'label', className: 'dcp-bal-label' }, '余额'),
+            React.createElement('span', { key: 'value', className: 'dcp-bal-value' }, value)
+          ]
+        : React.createElement('span', { className: 'dcp-bal-sym' }, symbol);
+
+      var button = React.createElement(
+        'button',
+        {
+          type: 'button',
+          className: 'dcp-bal',
+          'data-rail': wide ? 'false' : 'true',
+          'data-state': state.kind,
+          'data-balance': ok ? amount : '',
+          'aria-label': ok ? '账户余额 ' + amount : '账户余额暂不可用'
+        },
+        children
+      );
+
+      var tip = ok
+        ? '充值 ' + formatMoney(summary.currency, summary.recharge) +
+          ' · 赠送 ' + formatMoney(summary.currency, summary.bonus)
+        : state.reason === 'no-grant-no-key'
+          ? '没有账号登录，也没有可用的 DEEPSEEK_API_KEY'
+          : '余额读取失败（' + (state.reason || 'unknown') + '）';
+      if (primitives !== null && typeof primitives.Tooltip === 'function') {
+        return React.createElement(primitives.Tooltip, { label: tip, side: 'top', delayMs: 240 }, button);
+      }
+      return React.createElement('span', { title: tip }, button);
+    }
+
+    /** Poll the authenticated Host route while the sidebar is mounted. */
+    function SidebarBalance(props) {
+      var stateData = React.useState({ kind: 'pending' });
+      var state = stateData[0];
+      var setState = stateData[1];
+
+      React.useEffect(function () {
+        var disposed = false;
+        var loading = false;
+        var retryTimer = null;
+        var request = new AbortController();
+
+        async function load(retry = true) {
+          if (disposed || loading || retryTimer !== null) return;
+          loading = true;
+          var next;
+          try {
+            var response = await fetch('./api/cost-pill.balance', {
+              credentials: 'same-origin',
+              headers: { accept: 'application/json' },
+              signal: request.signal
+            });
+            if (response.ok) {
+              var body = await response.json().catch(function () { return null; });
+              var summary = normalizeBalance(body);
+              next = summary !== null ? { kind: 'ok', summary: summary } : {
+                kind: 'empty', reason: body && body.reason || 'bad-json'
+              };
+            } else {
+              next = { kind: 'error', reason: 'http-' + response.status };
+            }
+          } catch (error) {
+            next = { kind: 'error', reason: 'network' };
+          } finally {
+            loading = false;
+          }
+          if (disposed) return;
+          if (retry && /^(?:network|bad-json|internal|http-(?:408|429|5\d\d))$/.test(next.reason)) {
+            retryTimer = setTimeout(function () {
+              retryTimer = null;
+              load(false);
+            }, 2000);
+            return;
+          }
+          setState(next);
+        }
+
+        function onVisible() {
+          if (document.hidden !== true) load();
+        }
+
+        load();
+        var interval = setInterval(load, 60000);
+        document.addEventListener('visibilitychange', onVisible);
+        window.addEventListener('focus', onVisible);
+        return function () {
+          disposed = true;
+          request.abort();
+          clearInterval(interval);
+          clearTimeout(retryTimer);
+          document.removeEventListener('visibilitychange', onVisible);
+          window.removeEventListener('focus', onVisible);
+        };
+      }, []);
+
+      return React.createElement(BalanceCell, { state: state, wide: props.wide === true });
+    }
+
     /** Selector: the Turn locations that carry per-Turn usage. */
     function selectTurns(snapshot) {
       if (snapshot === undefined || snapshot === null) return undefined;
@@ -693,7 +881,7 @@ window.__ModuleLoader__.load({
     var inject = ['slots'];
 
     /**
-     * Client plugin body: the composer-stats cell plus the per-Turn footer chip.
+     * Register the composer-stats cell, per-Turn footer chip and sidebar balance.
      * @param ctx - Client root context.
      */
     function apply(ctx) {
@@ -719,6 +907,16 @@ window.__ModuleLoader__.load({
           TurnCost
         );
       });
+      ctx.slots.inject('sidebar.footer.action', function () {
+        return ctx.slots.register(
+          {
+            name: 'sidebar.footer.action',
+            id: 'balance',
+            order: 10
+          },
+          SidebarBalance
+        );
+      });
     }
 
     return {
@@ -730,9 +928,12 @@ window.__ModuleLoader__.load({
         isPeak: isPeak,
         billOf: billOf,
         billForMessage: billForMessage,
+        normalizeBalance: normalizeBalance,
+        formatMoney: formatMoney,
         money: money,
         CostPill: CostPill,
-        TurnCost: TurnCost
+        TurnCost: TurnCost,
+        BalanceCell: BalanceCell
       }
     };
   }

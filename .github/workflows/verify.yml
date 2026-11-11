@@ -17,8 +17,10 @@ jobs:
       # No install step: the plugin has zero runtime dependencies and the
       # browser bundle is checked in, so the suite runs against the shipped
       # artifact exactly as a user would load it.
-      - name: Offline verification suite
+      - name: Offline verification suite (client)
         run: node verify.mjs
+      - name: Offline verification suite (host)
+        run: node verify-host.mjs
       - name: Package manifest sanity
         run: |
           node -e "

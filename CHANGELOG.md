@@ -4,6 +4,24 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] — 2026-11-11
+
+### Added
+
+- Display the DeepSeek balance in the sidebar footer. The expanded sidebar shows
+  the amount, and the tooltip shows the recharge and granted balances.
+- Read the signed-in DeepSeek account first. If its balance is unavailable, use
+  the DeepSeek API key resolved by DSH’s credentials service.
+- Cover the authenticated route, account and API-key paths, and transient
+  failure recovery in the offline verification suite.
+
+### Fixed
+
+- Declare the Host dependencies so DSH activates the plugin and registers
+  the balance endpoint on its authenticated connection.
+- Retry a transient balance read after two seconds. Successful Host responses
+  are cached for 30 seconds, and failed reads can be retried immediately.
+
 ## [1.1.0] — 2026-11-06
 
 ### Added

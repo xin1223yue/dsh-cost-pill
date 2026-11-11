@@ -3,3 +3,7 @@ node_modules/
 out.txt
 .DS_Store
 Thumbs.db
+.env
+.env.*
+!.env.example
+.credentials.yaml

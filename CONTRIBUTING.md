@@ -28,7 +28,7 @@ empty host half, one verification script.
 ## Before opening a PR
 
 ```sh
-node verify.mjs
+npm run verify
 ```
 
 It must exit 0. Add assertions for any behaviour you change — the suite is the

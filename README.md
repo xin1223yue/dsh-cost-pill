@@ -8,7 +8,7 @@
 
 ![dsh-cost-pill](docs/demo.png)
 
-输入框下方统计行多一格 `¥2.15`，点开就是账单；每条回复的脚注行再多一个 `¥0.07`，点开是这一轮的分项。
+输入框下方统计行多一格 `¥2.15`，点开就是账单；每条回复的脚注行再多一个 `¥0.07`，点开是这一轮的分项；侧边栏底部再显示 DeepSeek 账户余额。
 
 ```powershell
 git clone https://github.com/xin1223yue/dsh-cost-pill.git
@@ -44,6 +44,19 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1   # macOS/Linux: sh ./ins
 
 弹层用的是官方「轮次用量」那套材质：半透明菜单面 + 背景虚化 + 原生投影描边，下面的输入框文字不会透上来。
 
+**④ 侧边栏底部的余额** —— 在设置与头像上方，一行安静的 key/value：左边 `余额`（11px 三级灰），右边 `¥197.66`（12px / 500 / tabular），无边框无底色，跟侧边栏自己的文字节奏一致：
+
+![sidebar balance](docs/footer.png)
+
+余额由 **Host 半**读取，所以登录态和 API Key 两种模式都能取：
+
+| 顺序 | 来源 | 覆盖 |
+| --- | --- | --- |
+| 1 | 账号控制器 `accountController.getBalance` | 已登录 DeepSeek 账号（与设置 → 账号同源） |
+| 2 | `DEEPSEEK_API_KEY`（DSH 凭据服务）→ `GET /user/balance` | 只有 API Key 的安装 |
+
+浏览器侧不碰任何密钥，只请求插件自己的鉴权路由 `/api/cost-pill.balance`（Host 将成功结果缓存 30 秒）；页面每 60 秒刷新一次，切回页面立即补一次，遇到临时错误会在 2 秒后重试一次。两者都取不到时右侧显示 `—`，悬停说明原因。
+
 ## 为什么是它
 
 | 关心的事 | 这个插件的做法 |
@@ -53,8 +66,8 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1   # macOS/Linux: sh ./ins
 | 换过模型 | 读 `routes[].model`，历史轮次不会被新模型价格覆盖 |
 | 重开旧会话 | 已加载的轮次永远按当时的价，**不会**用今天的时段重算 |
 | 估没估 | 窗口外没有逐轮记录的部分按已计价轮次的均价折算，并且**一定**带 `≈` |
-| 会不会拖慢 | 纯前端读现有数据，零请求、零 Host 服务、零日志回放 |
-| 会不会打架 | 只往两个官方槽位各加一格，不替换任何现有控件 |
+| 会不会拖慢 | 纯前端读现有数据，零日志回放；余额 60 秒一次 RPC，切回页面才补一次 |
+| 会不会打架 | 只往三个官方槽位各加一格，不替换任何现有控件 |
 | 安装门槛 | 零依赖、零构建，仓库里就是可直接加载的 bundle |
 
 ## 安装
@@ -157,26 +170,28 @@ dsh plugin --profile web remove dsh-cost-pill
 | --- | --- | --- | --- |
 | `conversation.composer.dock` | `cost` | 2 | 统计行那一格 |
 | `conversation.chat.assistant-actions` | `cost` | 60 | 脚注那一格 |
+| `sidebar.footer.action` | `balance` | 10 | 侧边栏底部余额（按 `wide` 自适应） |
 
 - 槽位由 dsh 的槽位契约声明，组件拿到标准 kit（`useChat` / `useProjection`），不读别的插件的 DOM。
 - 浏览器半是手写的 ModuleLoader bundle：`window.__ModuleLoader__.load({ id, factory })`，`react` / `react-dom` 走平台模块表。
-- 宿主半是空的（`export function apply() {}`）：不注册服务、不加工具、不碰 API Key。
+- 宿主通过 DSH 的鉴权路由读取余额，并在服务器内解析 API Key。
 - 计价是纯函数（`priceFor` / `priceBuckets` / `billOf` / `billForMessage`），`node verify.mjs` 覆盖它们。
 
 ## 兼容性
 
-在 dsh `0.2.1-rc.5` 上验证（Windows / Chromium）。依赖两个槽位名；dsh 若重命名它们，`¥` 会静默消失而不是报错——改 `apply()` 里的名字即可。
+在 dsh `0.2.1-rc.5` 上验证（Windows / Chromium）。依赖三个槽位名；dsh 若重命名它们，对应的 `¥` 会静默消失而不是报错——改 `apply()` 里的名字即可。余额格使用 DSH 的连接服务和凭据服务。账号控制器不可用时，余额路由会尝试读取已配置的 DeepSeek API Key。
 
 ## 已知限制
 
 - **一轮内跨模型重试**：`routes` 只给模型名不给分桶，整轮按最后一个路由计价。
+- **余额是轮询的**：默认 60 秒一次，切回页面立即补一次；刚消费完可能有最长一分钟的滞后。
 - **只认 DeepSeek 价表**：其他 provider 的模型落到 flash 档，金额仅供参照。
 - **子代理的独立会话**：各自计入各自会话，不会汇总进父会话的账单。
 
 ## 开发
 
 ```sh
-node verify.mjs     # 离线验证，CI 也跑这个
+npm run verify     # 验证浏览器和宿主两部分
 ```
 
 无依赖、无构建。改动说明见 [CONTRIBUTING.md](CONTRIBUTING.md)，变更记录见 [CHANGELOG.md](CHANGELOG.md)。
@@ -187,15 +202,16 @@ node verify.mjs     # 离线验证，CI 也跑这个
 
 ## English
 
-A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh) web plugin that shows what the current conversation costs, in CNY:
+A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh) web plugin for conversation costs in CNY and DeepSeek account balances.
 
 - one cell in the composer stats line (`conversation.composer.dock`),
-- one chip in every completed turn's footer (`conversation.chat.assistant-actions`),
-- a bill dialog with the three billed buckets, the model, the billing instant and the unit price in force.
+- one chip in every completed turn’s footer (`conversation.chat.assistant-actions`),
+- a bill dialog with the three billed buckets, the model, the billing instant and the unit price in force,
+- a sidebar balance with the recharge and granted wallet amounts in a tooltip.
 
 Every reply is priced at its own `turn/start` instant with the official DeepSeek table, including the 2026-08-17 peak/off-peak policy (peak 09:00–12:00 / 14:00–18:00 Beijing), so reopening a historical conversation never re-bills it at today's rate. Tokens that no per-turn record covers are estimated at the blended rate of the priced turns and always carry a `≈`.
 
-Client-only: no Host service, no Remote call, no session-log replay, no API key access, no build step, no runtime dependencies. The shipped `client.js` is a ready ModuleLoader bundle — `install.mjs` links it into your profile and registers the bundle, then restart dsh web.
+The Host reads the signed-in DeepSeek balance or resolves the configured DeepSeek API key through DSH’s credentials service. The browser reads the balance through an authenticated DSH route. The plugin has no build step or runtime dependencies. Run `install.mjs` to link the plugin into your profile and register its bundle, then restart DSH Web and reload the page.
 
 Verified against dsh `0.2.1-rc.5`.
 

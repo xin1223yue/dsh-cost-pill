@@ -82,6 +82,8 @@ function escape(value) {
 const source = readFileSync(join(here, 'client.js'), 'utf8');
 let captured = null;
 new Function('window', source)({
+  addEventListener() {},
+  removeEventListener() {},
   __ModuleLoader__: {
     load(definition) {
       captured = definition;
@@ -107,6 +109,8 @@ let injectedCss = null;
 
 /* Minimal document so the stylesheet path runs and its text can be asserted. */
 globalThis.document = {
+  addEventListener() {},
+  removeEventListener() {},
   querySelector: () => null,
   createElement: () => ({ dataset: {}, textContent: '' }),
   head: {
@@ -116,31 +120,39 @@ globalThis.document = {
   }
 };
 
-moduleExports.apply({
+const slotsStub = {
+  inject(name, callback) {
+    return callback();
+  },
+  register(options, component) {
+    registrations.push({ slot: options.name, options, component });
+    return () => {};
+  }
+};
+
+const rootCtx = {
   effect(callback) {
     const dispose = callback();
     return typeof dispose === 'function' ? dispose : () => {};
   },
-  slots: {
-    inject(name, callback) {
-      return callback();
-    },
-    register(options, component) {
-      registrations.push({ slot: options.name, options, component });
-      return () => {};
-    }
-  }
-});
+  slots: slotsStub
+};
 
-assert(registrations.length === 2, `expected 2 registrations, got ${registrations.length}`);
+moduleExports.apply(rootCtx);
+
+assert(registrations.length === 3, `expected 3 registrations, got ${registrations.length}`);
 
 const dock = registrations.find((entry) => entry.slot === 'conversation.composer.dock');
 const tail = registrations.find((entry) => entry.slot === 'conversation.chat.assistant-actions');
+const footer = registrations.find((entry) => entry.slot === 'sidebar.footer.action');
 assert(dock !== undefined, 'no composer dock registration');
 assert(tail !== undefined, 'no turn-footer registration');
+assert(footer !== undefined, 'no sidebar-footer registration');
 assert(dock.options.id === 'cost' && dock.options.order === 2, `dock cell ${JSON.stringify(dock.options)}`);
 assert(tail.options.id === 'cost', `turn cell id ${tail.options.id}`);
 assert(typeof tail.options.order === 'number' && tail.options.order > 0, 'turn cell has no order');
+assert(footer.options.id === 'balance', `footer cell id ${footer.options.id}`);
+assert(typeof footer.options.order === 'number', 'footer cell has no order');
 
 /* The dialog material must blur the composer behind it (turn-2 regression). */
 assert(injectedCss !== null, 'stylesheet not injected');
@@ -150,6 +162,8 @@ assert(injectedCss.includes('-webkit-backdrop-filter'), 'no -webkit backdrop-fil
 assert(injectedCss.includes('--dsw-elevation-stroke-color'), 'panel lost the native stroke');
 assert(!injectedCss.includes('z-index:2147483000'), 'panel kept the ad-hoc z-index');
 assert(injectedCss.includes('.dcp-turn{'), 'turn-footer chip has no style');
+assert(injectedCss.includes('.dcp-bal{'), 'balance cell has no style');
+assert(injectedCss.includes('[data-rail="true"]'), 'balance cell has no rail variant');
 
 const CostPill = dock.component;
 const TurnCost = tail.component;
@@ -362,6 +376,99 @@ assert(turnHtmlUnknown === '', `unknown Turn rendered: ${turnHtmlUnknown}`);
 
 const turnHtmlNoChat = renderTurn({ messageId: 'msg-1', sessionId: 'session-fixture' });
 assert(turnHtmlNoChat === '', `Turn chip rendered without the chat kit: ${turnHtmlNoChat}`);
+
+/* ---- 7. Sidebar balance ---------------------------------------------- */
+assert(internals.formatMoney('CNY', 1234.5) === '¥1,234.50', `formatMoney ${internals.formatMoney('CNY', 1234.5)}`);
+assert(internals.formatMoney('USD', 0) === '$0.00', 'formatMoney zero');
+
+const summary = internals.normalizeBalance({
+  ok: true,
+  currency: 'CNY',
+  total: 197.66,
+  recharge: 180,
+  bonus: 17.66
+});
+assert(summary !== null, 'balance payload not accepted');
+assert(summary.currency === 'CNY', `currency ${summary.currency}`);
+assert(Math.abs(summary.total - 197.66) < 1e-9, `total ${summary.total}`);
+assert(Math.abs(summary.recharge - 180) < 1e-9 && Math.abs(summary.bonus - 17.66) < 1e-9, 'wallet split');
+
+assert(internals.normalizeBalance({ ok: false, reason: 'no-grant-no-key' }) === null, 'failure payload accepted');
+assert(internals.normalizeBalance({ ok: true, total: 'x' }) === null, 'non-numeric total accepted');
+assert(internals.normalizeBalance(null) === null, 'null body accepted');
+
+/* USD payloads keep their currency. */
+const usdOnly = internals.normalizeBalance({ ok: true, currency: 'USD', total: 12.3, recharge: 12.3, bonus: 0 });
+assert(usdOnly.currency === 'USD' && Math.abs(usdOnly.total - 12.3) < 1e-9, 'usd payload misread');
+
+const wideCell = render(React.createElement(internals.BalanceCell, {
+  state: { kind: 'ok', summary: summary },
+  wide: true
+}));
+assert(wideCell.includes('data-balance="¥197.66"'), `wide cell markup ${wideCell}`);
+assert(wideCell.includes('>余额</span>'), 'wide cell lost its label');
+assert(wideCell.includes('>197.66</span>'), 'wide cell lost the amount');
+assert(wideCell.includes('data-state="ok"'), 'wide cell lost its state');
+
+const railCell = render(React.createElement(internals.BalanceCell, {
+  state: { kind: 'ok', summary: summary },
+  wide: false
+}));
+assert(railCell.includes('data-rail="true"'), `rail cell markup ${railCell}`);
+assert(!railCell.includes('>197.66</span>'), 'rail cell should stay a bare glyph');
+assert(railCell.includes('>¥</span>'), 'rail cell lost its glyph');
+
+/* Unknown states degrade to a tertiary dash, never to a diagnostic glyph. */
+const emptyCell = render(React.createElement(internals.BalanceCell, {
+  state: { kind: 'empty', reason: 'no-grant-no-key' },
+  wide: true
+}));
+assert(emptyCell.includes('data-state="empty"'), `empty markup ${emptyCell}`);
+assert(emptyCell.includes('>—</span>'), 'empty cell should show a dash');
+assert(!emptyCell.includes('?') && !emptyCell.includes('!'), 'diagnostic glyph leaked into the UI');
+
+const failedCell = render(React.createElement(internals.BalanceCell, { state: { kind: 'error' }, wide: true }));
+assert(failedCell.includes('data-state="error"') && failedCell.includes('>—</span>'), `error markup ${failedCell}`);
+
+assert(internals.BalanceCell({ state: { kind: 'pending' }, wide: true }) === null,
+  'pending state should render nothing');
+assert(typeof footer.component === 'function', 'balance slot did not register a component');
+
+/* A transient poll failure retries without clearing a visible balance. */
+const originalFetch = globalThis.fetch;
+const originalTimeout = globalThis.setTimeout;
+const originalEffect = React.useEffect;
+let retryPoll;
+let disposeBalance;
+let balanceCalls = 0;
+try {
+  globalThis.fetch = async () => {
+    balanceCalls += 1;
+    return Response.json(balanceCalls === 1
+      ? { ok: false, reason: 'network' }
+      : { ok: true, ...summary, total: 200 });
+  };
+  globalThis.setTimeout = (callback, delay) => {
+    assert(delay === 2000, 'unexpected balance retry delay');
+    retryPoll = callback;
+    return -1;
+  };
+  React.useEffect = (effect) => { disposeBalance = effect(); };
+  stateCursor = 0;
+  stateSlots[0] = { kind: 'ok', summary };
+  footer.component({ wide: true });
+  await new Promise(setImmediate);
+  assert(balanceCalls === 1 && typeof retryPoll === 'function', 'transient balance read did not schedule a retry');
+  assert(stateSlots[0].summary === summary, 'first failure cleared the displayed balance');
+  retryPoll();
+  await new Promise(setImmediate);
+  assert(balanceCalls === 2 && stateSlots[0].summary?.total === 200, 'balance did not recover on retry');
+} finally {
+  disposeBalance?.();
+  globalThis.fetch = originalFetch;
+  globalThis.setTimeout = originalTimeout;
+  React.useEffect = originalEffect;
+}
 
 console.log('OK');
 console.log('  peak    : ' + internals.money(exact.cost) + '  (deepseek-v4-pro, ' + exact.turns + ' turn)');
